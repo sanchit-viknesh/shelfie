@@ -21,6 +21,20 @@ export default function App() {
     .filter((it) => statusOf(it) !== 'green')
     .sort((a, b) => STATUS_ORDER[statusOf(a)] - STATUS_ORDER[statusOf(b)])
 
+  const shareList = async () => {
+    const text = `Shelfie - grocery list:\n${buyNowItems.map((it) => `- ${it.name}`).join('\n')}`
+    if (navigator.share) {
+      try {
+        await navigator.share({ text })
+      } catch {
+        // user cancelled the share sheet, nothing to do
+      }
+    } else {
+      await navigator.clipboard.writeText(text)
+      alert('List copied to clipboard')
+    }
+  }
+
   return (
     <div className="min-h-screen bg-slate-900 pb-24">
       <header className="sticky top-0 z-10 bg-slate-900/95 backdrop-blur px-4 pt-6 pb-4 border-b border-slate-800">
@@ -62,6 +76,15 @@ export default function App() {
           <div className="flex flex-col gap-2">
             {buyNowItems.length === 0 && (
               <p className="text-slate-400 text-center mt-8">Nothing needed right now.</p>
+            )}
+            {buyNowItems.length > 0 && (
+              <button
+                type="button"
+                onClick={shareList}
+                className="mb-2 rounded-lg py-2 text-sm font-semibold bg-emerald-500 text-slate-900"
+              >
+                Share list
+              </button>
             )}
             {buyNowItems.map((item) => (
               <ItemRow key={item.id} item={item} onChange={updateItem} />
