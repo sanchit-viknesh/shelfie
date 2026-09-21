@@ -8,6 +8,8 @@ import ItemRow from './components/ItemRow'
 export default function App() {
   const [items, setItems] = useState(() => loadItems())
   const [view, setView] = useState('home')
+  const [showShareSheet, setShowShareSheet] = useState(false)
+  const [copied, setCopied] = useState(false)
 
   useEffect(() => {
     saveItems(items)
@@ -21,17 +23,23 @@ export default function App() {
     .filter((it) => statusOf(it) !== 'green')
     .sort((a, b) => STATUS_ORDER[statusOf(a)] - STATUS_ORDER[statusOf(b)])
 
+  const listText = `Shelfie - grocery list:\n${buyNowItems.map((it) => `- ${it.name}`).join('\n')}`
+
+  const copyList = async () => {
+    await navigator.clipboard.writeText(listText)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
+
   const shareList = async () => {
-    const text = `Shelfie - grocery list:\n${buyNowItems.map((it) => `- ${it.name}`).join('\n')}`
     if (navigator.share) {
       try {
-        await navigator.share({ text })
+        await navigator.share({ text: listText })
       } catch {
         // user cancelled the share sheet, nothing to do
       }
     } else {
-      await navigator.clipboard.writeText(text)
-      alert('List copied to clipboard')
+      copyList()
     }
   }
 
@@ -80,7 +88,7 @@ export default function App() {
             {buyNowItems.length > 0 && (
               <button
                 type="button"
-                onClick={shareList}
+                onClick={() => setShowShareSheet(true)}
                 className="mb-2 rounded-lg py-2 text-sm font-semibold bg-emerald-500 text-slate-900"
               >
                 Share list
@@ -92,6 +100,48 @@ export default function App() {
           </div>
         )}
       </main>
+
+      {showShareSheet && (
+        <div
+          className="fixed inset-0 z-20 bg-black/60 flex items-end"
+          onClick={() => setShowShareSheet(false)}
+        >
+          <div
+            className="w-full bg-slate-800 rounded-t-2xl p-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 className="text-lg font-semibold text-slate-100 mb-2">Grocery list</h2>
+            <textarea
+              readOnly
+              value={listText}
+              className="w-full h-40 rounded-lg bg-slate-900 text-slate-200 p-3 text-sm resize-none"
+            />
+            <div className="mt-3 flex gap-2">
+              <button
+                type="button"
+                onClick={copyList}
+                className="flex-1 rounded-lg py-2 text-sm font-semibold bg-slate-700 text-slate-100"
+              >
+                {copied ? 'Copied!' : 'Copy'}
+              </button>
+              <button
+                type="button"
+                onClick={shareList}
+                className="flex-1 rounded-lg py-2 text-sm font-semibold bg-emerald-500 text-slate-900"
+              >
+                Send
+              </button>
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowShareSheet(false)}
+              className="mt-2 w-full rounded-lg py-2 text-sm text-slate-400"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
