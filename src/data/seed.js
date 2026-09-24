@@ -1,5 +1,3 @@
-export const SEED_VERSION = 2
-
 export const CATEGORIES = [
   'Dairy & Eggs',
   'Produce',

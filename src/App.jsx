@@ -1,22 +1,47 @@
 import { useEffect, useState } from 'react'
 import { CATEGORIES } from './data/seed'
-import { loadItems, saveItems } from './lib/storage'
+import { fetchItems, patchItem } from './lib/api'
 import { statusOf, STATUS_ORDER } from './lib/status'
 import CategorySection from './components/CategorySection'
 import ItemRow from './components/ItemRow'
 
 export default function App() {
-  const [items, setItems] = useState(() => loadItems())
+  const [items, setItems] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState(null)
   const [view, setView] = useState('home')
   const [showShareSheet, setShowShareSheet] = useState(false)
   const [copied, setCopied] = useState(false)
 
   useEffect(() => {
-    saveItems(items)
-  }, [items])
+    fetchItems()
+      .then(setItems)
+      .catch((err) => setLoadError(err.message))
+      .finally(() => setLoading(false))
+  }, [])
 
   const updateItem = (updated) => {
+    const previous = items
     setItems((prev) => prev.map((it) => (it.id === updated.id ? updated : it)))
+    patchItem(updated.id, { quantity: updated.quantity, lastBought: updated.lastBought }).catch(
+      () => setItems(previous)
+    )
+  }
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-slate-900 flex items-center justify-center">
+        <p className="text-slate-400">Loading...</p>
+      </div>
+    )
+  }
+
+  if (loadError) {
+    return (
+      <div className="min-h-screen bg-slate-900 flex items-center justify-center px-4">
+        <p className="text-rose-400 text-center">Couldn't reach the server: {loadError}</p>
+      </div>
+    )
   }
 
   const buyNowItems = items
