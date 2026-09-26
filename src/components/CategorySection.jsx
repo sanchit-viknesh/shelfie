@@ -1,6 +1,6 @@
 import ItemRow from './ItemRow'
 
-export default function CategorySection({ category, items, onChange }) {
+export default function CategorySection({ category, items, onChange, onDelete }) {
   if (items.length === 0) return null
 
   return (
@@ -12,7 +12,7 @@ export default function CategorySection({ category, items, onChange }) {
       )}
       <div className="flex flex-col gap-2">
         {items.map((item) => (
-          <ItemRow key={item.id} item={item} onChange={onChange} />
+          <ItemRow key={item.id} item={item} onChange={onChange} onDelete={onDelete} />
         ))}
       </div>
     </section>

@@ -10,15 +10,18 @@ export default async function handler(req, res) {
     }
 
     if (req.method === 'POST') {
-      // Replace the entire collection (used by the seed/migration script and
-      // by "reset to base data" — not by normal item edits, see [id].js).
-      const { items } = req.body
-      if (!Array.isArray(items) || items.length === 0) {
-        return res.status(400).json({ error: 'Expected { items: [non-empty array] }' })
+      const { name, category, quantity } = req.body
+      if (!name || !category) {
+        return res.status(400).json({ error: 'name and category are required' })
       }
-      await Item.deleteMany({})
-      const created = await Item.insertMany(items)
-      return res.status(200).json(created)
+      const created = await Item.create({
+        name,
+        category,
+        quantity: Number.isFinite(quantity) ? quantity : 3,
+        thresholds: { yellow: 2, red: 1 },
+        lastBought: null,
+      })
+      return res.status(201).json(created.toObject())
     }
 
     res.setHeader('Allow', ['GET', 'POST'])
