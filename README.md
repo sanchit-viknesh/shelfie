@@ -19,7 +19,7 @@ translation layer.
 2. [`docs/phases/00-system-design.md`](docs/phases/00-system-design.md) — first session, no code
 3. [`docs/ANGULAR-TO-REACT.md`](docs/ANGULAR-TO-REACT.md) — keep it open through Phase 4
 
-## Planned stack
+## Planned stack (the 14-phase coached plan)
 
 | Layer | Choice |
 |---|---|
@@ -33,16 +33,49 @@ translation layer.
 
 Both hosting and database are free tier with no credit card, and neither can surprise-bill.
 
-## Status
+## Status: paused plan, working v1 shipped instead
 
-Phase 0. Design docs only — no application code yet, deliberately.
+The 14-phase "you type every line, I coach" plan above was paused early on in favor of a working
+app the household could actually use right away. What exists today is simpler than the planned
+stack, built to be functional first:
 
-## Repo shape (as it will be)
+| Layer | What's actually running |
+|---|---|
+| UI | React 19, Vite 8, Tailwind 4 |
+| API | Plain Vercel serverless functions under `/api` (no Express) |
+| Database | MongoDB Atlas (M0 free tier) + Mongoose |
+| Auth | None — the API is unauthenticated, trusted by obscurity of the URL |
+| Tests | None yet |
+| Hosting | Vercel (Hobby), auto-deploys `main` |
+
+The coached, from-scratch build (Express, JWT auth, TanStack Query, tests) remains the intended
+learning track and will resume — this is the pragmatic detour that let the app go live for real
+household use in the meantime.
+
+## Current architecture
 
 ```
-/               Vite React client
-/server         Express API — standalone on :3000 in dev
-/api/index.js   adapter exposing the Express app as a Vercel function
-/shared         domain logic imported by both client and server
-/docs           the learning track
+src/                React client (Vite)
+  data/seed.js      Base item list — source of truth for a fresh/reset database
+  lib/api.js        fetch() wrappers around /api/items
+  lib/status.js      Pure domain logic: quantity -> red/yellow/green
+api/
+  _db.js            Mongoose connection (cached across warm serverless invocations) + Item schema
+  items.js          GET (list all) / POST (replace entire collection — seeding/reset only)
+  items/[id].js     PATCH (update one item's quantity/lastBought)
+scripts/seedDb.js   One-off: push src/data/seed.js into MongoDB
 ```
+
+Data flow: the client calls `/api/items` on load, and `PATCH`es a single item whenever a `+`/`-`
+button is tapped. There is no client-side cache layer (no TanStack Query yet) — state lives in a
+plain `useState`, optimistically updated and rolled back on a failed request.
+
+### Known gaps, deliberately deferred
+
+- **No auth.** Anyone with the URL can read or write the list. Fine for a household app with an
+  obscure URL; not fine if this ever needs to be shared wider.
+- **No tests.** Domain logic (`statusOf`) is pure and easy to test — this is the natural first
+  target once the coached track resumes.
+- **`POST /api/items` replaces the whole collection.** It's meant for seeding/reset, not everyday
+  use, and is guarded against an empty body, but it's still a blunt instrument with no auth in
+  front of it.
