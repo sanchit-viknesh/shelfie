@@ -13,8 +13,8 @@ export default async function handler(req, res) {
       // Replace the entire collection (used by the seed/migration script and
       // by "reset to base data" — not by normal item edits, see [id].js).
       const { items } = req.body
-      if (!Array.isArray(items)) {
-        return res.status(400).json({ error: 'Expected { items: [...] }' })
+      if (!Array.isArray(items) || items.length === 0) {
+        return res.status(400).json({ error: 'Expected { items: [non-empty array] }' })
       }
       await Item.deleteMany({})
       const created = await Item.insertMany(items)

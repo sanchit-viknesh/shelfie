@@ -6,7 +6,7 @@ import { Item, connectDb } from '../api/_db.js'
 
 async function run() {
   await connectDb()
-  const items = seedItems().map(({ id, ...rest }) => rest)
+  const items = seedItems().map(({ id: _id, ...rest }) => rest)
   await Item.deleteMany({})
   const created = await Item.insertMany(items)
   console.log(`Seeded ${created.length} items into MongoDB.`)
