@@ -43,16 +43,16 @@ export default function App() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-slate-900 flex items-center justify-center">
-        <p className="text-slate-400">Loading...</p>
+      <div className="min-h-screen bg-white flex items-center justify-center">
+        <p className="text-muted font-semibold">Loading your shelf…</p>
       </div>
     )
   }
 
   if (loadError) {
     return (
-      <div className="min-h-screen bg-slate-900 flex items-center justify-center px-4">
-        <p className="text-rose-400 text-center">Couldn't reach the server: {loadError}</p>
+      <div className="min-h-screen bg-white flex items-center justify-center px-4">
+        <p className="text-out text-center font-semibold">Couldn't reach the server: {loadError}</p>
       </div>
     )
   }
@@ -82,15 +82,15 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-900 pb-24">
-      <header className="sticky top-0 z-10 bg-slate-900/95 backdrop-blur px-4 pt-6 pb-4 border-b border-slate-800 shadow-sm">
-        <h1 className="text-2xl font-bold text-emerald-400 tracking-tight">Shelfie</h1>
+    <div className="min-h-screen bg-white pb-28">
+      <header className="sticky top-0 z-10 bg-band px-4 pt-[max(1.5rem,env(safe-area-inset-top))] pb-4 border-b border-band-line">
+        <h1 className="text-[26px] font-extrabold text-ink tracking-tight">Shelfie</h1>
         <div className="mt-3 flex gap-2">
           <button
             type="button"
             onClick={() => setView('home')}
-            className={`flex-1 rounded-lg py-2 text-sm font-semibold transition-colors ${
-              view === 'home' ? 'bg-emerald-500 text-slate-900' : 'bg-slate-800 text-slate-300'
+            className={`flex-1 rounded-[10px] py-2.5 text-sm font-bold transition-colors ${
+              view === 'home' ? 'bg-accent text-white' : 'bg-white text-ink/80'
             }`}
           >
             Home
@@ -98,8 +98,8 @@ export default function App() {
           <button
             type="button"
             onClick={() => setView('buyNow')}
-            className={`flex-1 rounded-lg py-2 text-sm font-semibold transition-colors ${
-              view === 'buyNow' ? 'bg-emerald-500 text-slate-900' : 'bg-slate-800 text-slate-300'
+            className={`flex-1 rounded-[10px] py-2.5 text-sm font-bold transition-colors ${
+              view === 'buyNow' ? 'bg-accent text-white' : 'bg-white text-ink/80'
             }`}
           >
             What to buy now {buyNowItems.length > 0 && `(${buyNowItems.length})`}
@@ -122,13 +122,13 @@ export default function App() {
         {view === 'buyNow' && (
           <div className="flex flex-col gap-2">
             {buyNowItems.length === 0 && (
-              <p className="text-slate-400 text-center mt-8">Nothing needed right now.</p>
+              <p className="text-muted text-center font-semibold mt-8">Nothing needed right now.</p>
             )}
             {buyNowItems.length > 0 && (
               <button
                 type="button"
                 onClick={() => setShowShareSheet(true)}
-                className="mb-2 rounded-lg py-2 text-sm font-semibold bg-emerald-500 text-slate-900 active:scale-[0.98] transition-transform"
+                className="mb-2 rounded-lg py-3 text-sm font-bold bg-accent text-white active:scale-[0.98] transition-transform"
               >
                 Share list
               </button>
@@ -145,7 +145,7 @@ export default function App() {
           type="button"
           onClick={() => setShowAddSheet(true)}
           aria-label="Add item"
-          className="fixed bottom-6 right-6 z-10 h-14 w-14 rounded-full bg-emerald-500 text-slate-900 text-3xl leading-none font-light shadow-lg shadow-black/40 active:scale-95 transition-transform"
+          className="fixed bottom-[max(1.5rem,env(safe-area-inset-bottom))] right-6 z-10 h-14 w-14 rounded-full bg-accent text-white text-3xl leading-none font-light shadow-lg shadow-accent/40 active:scale-95 transition-transform"
         >
           +
         </button>
@@ -157,31 +157,31 @@ export default function App() {
 
       {showShareSheet && (
         <div
-          className="fixed inset-0 z-20 bg-black/60 flex items-end"
+          className="fixed inset-0 z-20 bg-ink/40 flex items-end"
           onClick={() => setShowShareSheet(false)}
         >
           <div
-            className="w-full bg-slate-800 rounded-t-2xl p-4"
+            className="w-full bg-white rounded-t-2xl p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
-            <h2 className="text-lg font-semibold text-slate-100 mb-2">Grocery list</h2>
+            <h2 className="text-lg font-extrabold text-ink mb-3">Grocery list</h2>
             <textarea
               readOnly
               value={listText}
-              className="w-full h-40 rounded-lg bg-slate-900 text-slate-200 p-3 text-sm resize-none"
+              className="w-full h-40 rounded-lg bg-accent-soft text-ink p-3 text-sm resize-none outline-none ring-1 ring-line"
             />
             <div className="mt-3 flex gap-2">
               <button
                 type="button"
                 onClick={copyList}
-                className="flex-1 rounded-lg py-2 text-sm font-semibold bg-slate-700 text-slate-100"
+                className="flex-1 rounded-lg py-3 text-sm font-bold bg-accent-soft text-ink"
               >
                 {copied ? 'Copied!' : 'Copy'}
               </button>
               <button
                 type="button"
                 onClick={shareList}
-                className="flex-1 rounded-lg py-2 text-sm font-semibold bg-emerald-500 text-slate-900"
+                className="flex-1 rounded-lg py-3 text-sm font-bold bg-accent text-white"
               >
                 Send
               </button>
@@ -189,7 +189,7 @@ export default function App() {
             <button
               type="button"
               onClick={() => setShowShareSheet(false)}
-              className="mt-2 w-full rounded-lg py-2 text-sm text-slate-400"
+              className="mt-2 w-full rounded-lg py-2.5 text-sm font-semibold text-muted"
             >
               Close
             </button>

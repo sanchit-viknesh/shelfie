@@ -6,7 +6,7 @@ export default function CategorySection({ category, items, onChange, onDelete })
   return (
     <section className="mb-6">
       {category && (
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-400 mb-2">
+        <h2 className="mb-2.5 inline-block rounded-full bg-chip px-3 py-1 text-xs font-bold uppercase tracking-wider text-chip-ink">
           {category}
         </h2>
       )}
