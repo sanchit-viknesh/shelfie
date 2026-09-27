@@ -1,0 +1,20 @@
+import ItemRow from './ItemRow'
+
+export default function CategorySection({ category, items, onChange, onDelete }) {
+  if (items.length === 0) return null
+
+  return (
+    <section className="mb-6">
+      {category && (
+        <h2 className="mb-2.5 inline-block rounded-full bg-chip px-3 py-1 text-xs font-bold uppercase tracking-wider text-chip-ink">
+          {category}
+        </h2>
+      )}
+      <div className="flex flex-col gap-2">
+        {items.map((item) => (
+          <ItemRow key={item.id} item={item} onChange={onChange} onDelete={onDelete} />
+        ))}
+      </div>
+    </section>
+  )
+}
