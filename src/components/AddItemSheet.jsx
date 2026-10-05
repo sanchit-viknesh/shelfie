@@ -1,16 +1,17 @@
 import { useState } from 'react'
 import { CATEGORIES } from '../data/seed'
+import Stepper from './Stepper'
 
 const field =
   'w-full rounded-lg bg-white text-ink px-3 py-2.5 text-base mb-4 outline-none ring-1 ring-line focus:ring-2 focus:ring-accent'
 const fieldLabel = 'block text-xs font-bold uppercase tracking-wider text-muted mb-1.5'
-const stepBtn =
-  'h-11 w-11 rounded-full bg-accent-soft text-ink text-xl leading-none active:scale-95 transition-transform'
 
 export default function AddItemSheet({ onClose, onAdd }) {
   const [name, setName] = useState('')
   const [category, setCategory] = useState(CATEGORIES[0])
   const [quantity, setQuantity] = useState(3)
+  const [minQty, setMinQty] = useState(2)
+  const [usualQty, setUsualQty] = useState(3)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState(null)
 
@@ -20,7 +21,7 @@ export default function AddItemSheet({ onClose, onAdd }) {
     setSaving(true)
     setError(null)
     try {
-      await onAdd({ name: name.trim(), category, quantity })
+      await onAdd({ name: name.trim(), category, quantity, minQty, usualQty })
       onClose()
     } catch {
       setError("Couldn't save. Check your connection and try again.")
@@ -63,15 +64,19 @@ export default function AddItemSheet({ onClose, onAdd }) {
           ))}
         </select>
 
-        <span className={fieldLabel}>Starting quantity</span>
-        <div className="mb-5 flex items-center gap-3">
-          <button type="button" onClick={() => setQuantity((q) => Math.max(0, q - 1))} aria-label="One less" className={stepBtn}>
-            −
-          </button>
-          <span className="w-8 text-center text-lg font-extrabold text-ink tabular-nums">{quantity}</span>
-          <button type="button" onClick={() => setQuantity((q) => q + 1)} aria-label="One more" className={stepBtn}>
-            +
-          </button>
+        <div className="mb-5 flex flex-col gap-3">
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-sm font-bold text-ink">How many now</span>
+            <Stepper value={quantity} onChange={setQuantity} label="now" />
+          </div>
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-sm font-bold text-ink">Buy more when down to</span>
+            <Stepper value={minQty} onChange={setMinQty} min={1} label="minimum" />
+          </div>
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-sm font-bold text-ink">Usually buy</span>
+            <Stepper value={usualQty} onChange={setUsualQty} min={1} label="usual amount" />
+          </div>
         </div>
 
         {error && <p className="mb-3 text-sm font-semibold text-out">{error}</p>}

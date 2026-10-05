@@ -14,6 +14,8 @@ const item = (name, category, quantity = 3, lastBought = null) => ({
   category,
   quantity,
   thresholds: { yellow: 2, red: 1 },
+  usualQty: 3,
+  reviewed: false,
   lastBought,
 })
 

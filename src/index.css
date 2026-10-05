@@ -16,6 +16,7 @@
   --color-out-soft: #fdecee;
   --color-low: #8c5a06;
   --color-low-soft: #fff3de;
+  --color-ok: #1c7a4a; --color-ok-soft: #e4f5ec;
 }
 
 body {

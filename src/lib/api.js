@@ -1,6 +1,7 @@
 function normalize(doc) {
   const { _id, __v, ...rest } = doc
-  return { id: _id, ...rest }
+  // Items saved before the minimums questionnaire don't have these two fields yet
+  return { id: _id, usualQty: 3, reviewed: false, ...rest }
 }
 
 export async function fetchItems() {

@@ -33,6 +33,8 @@ const itemSchema = new mongoose.Schema({
   quantity: { type: Number, required: true },
   thresholds: { type: thresholdSchema, required: true },
   lastBought: { type: String, default: null },
+  usualQty: { type: Number, default: 3 },
+  reviewed: { type: Boolean, default: false },
 })
 
 export const Item = mongoose.models.Item || mongoose.model('Item', itemSchema)

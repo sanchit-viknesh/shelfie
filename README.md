@@ -58,17 +58,28 @@ household use in the meantime.
 src/                React client (Vite)
   data/seed.js      Base item list — source of truth for a fresh/reset database
   lib/api.js        fetch() wrappers around /api/items
-  lib/status.js      Pure domain logic: quantity -> red/yellow/green
+  lib/status.js     Pure domain logic: quantity + minimum -> red/yellow/green
+  lib/usePersisted.js  useState backed by localStorage (shopping ticks live on the phone)
+  components/       Home rows, To buy view (tick boxes, Complete / Revert), minimums
+                    questionnaire, add-item sheet
 api/
   _db.js            Mongoose connection (cached across warm serverless invocations) + Item schema
-  items.js          GET (list all) / POST (replace entire collection — seeding/reset only)
-  items/[id].js     PATCH (update one item's quantity/lastBought)
-scripts/seedDb.js   One-off: push src/data/seed.js into MongoDB
+  items.js          GET (list all) / POST (add one item)
+  items/[id].js     PATCH (update one item) / DELETE (remove one item)
+scripts/seedDb.js   One-off: push src/data/seed.js into MongoDB (replaces the collection)
 ```
 
-Data flow: the client calls `/api/items` on load, and `PATCH`es a single item whenever a `+`/`-`
-button is tapped. There is no client-side cache layer (no TanStack Query yet) — state lives in a
-plain `useState`, optimistically updated and rolled back on a failed request.
+An item is `{ name, category, quantity, thresholds: { yellow, red }, usualQty, reviewed, lastBought }`.
+Each item has its own minimum (the "buy more when down to" number, stored as `thresholds.yellow`,
+with `red` one lower) and a usual amount that Complete shopping adds. `reviewed` marks items that
+have been through the questionnaire. Older documents without `usualQty` / `reviewed` are filled in
+with defaults by `normalize()` in `lib/api.js`.
+
+Data flow: the client calls `/api/items` on load. A `+`/`-` tap, a questionnaire answer, or
+Complete shopping `PATCH`es the affected items. Ticking boxes on the To buy tab does not touch the
+network: ticks (and the undo record for the last Complete) are kept in `localStorage` on that
+phone until Complete. State lives in a plain `useState`, optimistically updated and rolled back on
+a failed request. There is no client-side cache layer (no TanStack Query yet).
 
 ### Known gaps, deliberately deferred
 
@@ -76,6 +87,5 @@ plain `useState`, optimistically updated and rolled back on a failed request.
   obscure URL; not fine if this ever needs to be shared wider.
 - **No tests.** Domain logic (`statusOf`) is pure and easy to test — this is the natural first
   target once the coached track resumes.
-- **`POST /api/items` replaces the whole collection.** It's meant for seeding/reset, not everyday
-  use, and is guarded against an empty body, but it's still a blunt instrument with no auth in
-  front of it.
+- **Ticks and Revert are per phone.** Two phones shopping at once don't see each other's ticks, and
+  only the phone that pressed Complete can Revert it.
