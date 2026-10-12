@@ -68,8 +68,8 @@ export default function Questionnaire({ items, categories, onSave, onClose }) {
     return first === -1 ? 0 : first
   })
 
-  const finished = index >= order.length
-  const item = finished ? null : items.find((it) => it.id === order[index])
+  const item = items.find((it) => it.id === order[index])
+  const finished = !item
   const skipped = items.filter((it) => !it.reviewed).length
 
   const next = (patch) => {

@@ -9,6 +9,8 @@ import AddItemSheet from './components/AddItemSheet'
 import Questionnaire from './components/Questionnaire'
 import ToBuyView from './components/ToBuyView'
 
+const REVERT_WINDOW_MS = 12 * 60 * 60 * 1000
+
 export default function App() {
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(true)
@@ -21,7 +23,11 @@ export default function App() {
   const [query, setQuery] = useState('')
   // Shopping progress lives on this phone only, so ticking in the store needs no signal
   const [ticks, setTicks] = usePersisted('shelfie.ticks', [])
-  const [lastShopping, setLastShopping] = usePersisted('shelfie.lastShopping', null)
+  const [savedShopping, setLastShopping] = usePersisted('shelfie.lastShopping', null)
+  // Revert only makes sense soon after Complete; later, counts have moved on
+  const [openedAt] = useState(() => Date.now())
+  const lastShopping =
+    savedShopping && openedAt - new Date(savedShopping.at).getTime() < REVERT_WINDOW_MS ? savedShopping : null
 
   useEffect(() => {
     fetchItems()
@@ -30,18 +36,24 @@ export default function App() {
       .finally(() => setLoading(false))
   }, [])
 
+  // Forget ticks for items that left the list (deleted, or restocked from Home or another phone)
+  useEffect(() => {
+    if (loading) return
+    const due = new Set(items.filter((it) => statusOf(it) !== 'green').map((it) => it.id))
+    setTicks((prev) => (prev.every((id) => due.has(id)) ? prev : prev.filter((id) => due.has(id))))
+  }, [items, loading, setTicks])
+
   const updateItem = (updated) => {
-    const previous = items
+    const previous = items.find((it) => it.id === updated.id)
     setItems((prev) => prev.map((it) => (it.id === updated.id ? updated : it)))
-    patchItem(updated.id, { quantity: updated.quantity, lastBought: updated.lastBought }).catch(
-      () => setItems(previous)
+    patchItem(updated.id, { quantity: updated.quantity, lastBought: updated.lastBought }).catch(() =>
+      setItems((prev) => prev.map((it) => (it.id === updated.id ? previous : it)))
     )
   }
 
   const removeItem = (item) => {
-    const previous = items
     setItems((prev) => prev.filter((it) => it.id !== item.id))
-    deleteItem(item.id).catch(() => setItems(previous))
+    deleteItem(item.id).catch(() => setItems((prev) => [...prev, item]))
   }
 
   const saveSettings = (item, patch) => {
@@ -78,10 +90,17 @@ export default function App() {
 
     changes.forEach((c) =>
       patchItem(c.id, { quantity: c.from + c.added, lastBought: now }).catch(() => {
+        // Take back just this item's addition (keeping any edits made since) and re-tick it
         setItems((prev) =>
-          prev.map((it) => (it.id === c.id ? { ...it, quantity: c.from, lastBought: c.prevBought } : it))
+          prev.map((it) =>
+            it.id === c.id ? { ...it, quantity: Math.max(0, it.quantity - c.added), lastBought: c.prevBought } : it
+          )
         )
-        setLastShopping((prev) => prev && { ...prev, changes: prev.changes.filter((x) => x.id !== c.id) })
+        setLastShopping((prev) => {
+          const changes = prev ? prev.changes.filter((x) => x.id !== c.id) : []
+          return changes.length > 0 ? { ...prev, changes } : null
+        })
+        setTicks((prev) => [...prev, c.id])
       })
     )
   }

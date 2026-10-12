@@ -19,5 +19,7 @@ export function categoriesOf(items) {
 export function resolveCategory(typed, known) {
   const name = typed.trim().replace(/\s+/g, ' ').slice(0, MAX_CATEGORY_LENGTH)
   const existing = known.find((c) => c.toLowerCase() === name.toLowerCase())
-  return existing ?? name.charAt(0).toUpperCase() + name.slice(1)
+  if (existing) return existing
+  // Only tidy all-lowercase input, so "iPhone cases" is left as typed
+  return name === name.toLowerCase() ? name.charAt(0).toUpperCase() + name.slice(1) : name
 }
