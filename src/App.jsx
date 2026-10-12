@@ -1,19 +1,24 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { categoriesOf } from './lib/categories'
-import { fetchItems, patchItem, createItem, deleteItem } from './lib/api'
-import { statusOf, STATUS_ORDER } from './lib/status'
+import { fetchItems, normalize } from './lib/api'
+import { statusOf, STATUS_ORDER, thresholdsFor } from './lib/status'
 import { usePersisted } from './lib/usePersisted'
+import { useOutbox } from './lib/useOutbox'
 import CategorySection from './components/CategorySection'
 import SearchBox from './components/SearchBox'
+import StatusStrip from './components/StatusStrip'
 import AddItemSheet from './components/AddItemSheet'
 import Questionnaire from './components/Questionnaire'
 import ToBuyView from './components/ToBuyView'
 
 const REVERT_WINDOW_MS = 12 * 60 * 60 * 1000
+const REFRESH_GAP_MS = 5000
+const NOTICE_MS = 6000
 
 export default function App() {
-  const [items, setItems] = useState([])
-  const [loading, setLoading] = useState(true)
+  // The last list the server sent is kept on the phone, so the app opens instantly, with or without signal
+  const [items, setItems] = usePersisted('shelfie.items', [])
+  const [itemsAt, setItemsAt] = usePersisted('shelfie.itemsAt', null)
   const [loadError, setLoadError] = useState(null)
   const [view, setView] = useState('home')
   const [showShareSheet, setShowShareSheet] = useState(false)
@@ -21,6 +26,8 @@ export default function App() {
   const [showQuestionnaire, setShowQuestionnaire] = useState(false)
   const [copied, setCopied] = useState(false)
   const [query, setQuery] = useState('')
+  const [notice, setNotice] = useState(null)
+  const [now, setNow] = useState(() => Date.now())
   // Shopping progress lives on this phone only, so ticking in the store needs no signal
   const [ticks, setTicks] = usePersisted('shelfie.ticks', [])
   const [savedShopping, setLastShopping] = usePersisted('shelfie.lastShopping', null)
@@ -28,13 +35,88 @@ export default function App() {
   const [openedAt] = useState(() => Date.now())
   const lastShopping =
     savedShopping && openedAt - new Date(savedShopping.at).getTime() < REVERT_WINDOW_MS ? savedShopping : null
+  const loading = itemsAt === null && !loadError
+
+  const editSeq = useRef(0)
+  const refreshing = useRef(false)
+  const lastRefresh = useRef(0)
+
+  const onCreated = useCallback(
+    (tempId, doc) => {
+      const created = normalize(doc)
+      setItems((prev) => prev.map((it) => (it.id === tempId ? created : it)))
+      setTicks((prev) => prev.map((id) => (id === tempId ? created.id : id)))
+    },
+    [setItems, setTicks]
+  )
+
+  // When the server refuses a change, say so and reload the list so the screen matches the server again
+  const [rejections, setRejections] = useState(0)
+  const onRejected = useCallback(() => {
+    setNotice("A change couldn't be saved and was undone")
+    setRejections((n) => n + 1)
+  }, [])
+  const itemsAtRef = useRef(itemsAt)
+  const outbox = useOutbox({ onCreated, onRejected })
+  const { flush, isEmpty, markReachable, reachable } = outbox
+
+  // Send waiting changes, then replace the list with the server's copy (this also picks up the other phone's changes)
+  const refresh = useCallback(async () => {
+    if (refreshing.current) return
+    refreshing.current = true
+    lastRefresh.current = Date.now()
+    try {
+      await flush()
+      const seq = editSeq.current
+      const fresh = await fetchItems()
+      markReachable(true)
+      // Skip it if something changed while it loaded; the next refresh gets it
+      if (editSeq.current === seq && isEmpty()) {
+        setItems(fresh)
+        setItemsAt(Date.now())
+      }
+    } catch (err) {
+      markReachable(false)
+      setLoadError((prev) => prev ?? (itemsAtRef.current === null ? err.message : null))
+    } finally {
+      refreshing.current = false
+    }
+  }, [flush, isEmpty, markReachable, setItems, setItemsAt])
+  useEffect(() => {
+    itemsAtRef.current = itemsAt
+  })
 
   useEffect(() => {
-    fetchItems()
-      .then(setItems)
-      .catch((err) => setLoadError(err.message))
-      .finally(() => setLoading(false))
-  }, [])
+    if (rejections > 0) refresh()
+  }, [rejections, refresh])
+
+  useEffect(() => {
+    refresh()
+    const onVisible = () => {
+      if (document.visibilityState === 'visible' && Date.now() - lastRefresh.current > REFRESH_GAP_MS) refresh()
+    }
+    document.addEventListener('visibilitychange', onVisible)
+    window.addEventListener('online', refresh)
+    const clock = setInterval(() => setNow(Date.now()), 60000)
+    return () => {
+      document.removeEventListener('visibilitychange', onVisible)
+      window.removeEventListener('online', refresh)
+      clearInterval(clock)
+    }
+  }, [refresh])
+
+  // After signal returns (even without an 'online' event), bring in the other phone's changes
+  const wasReachable = useRef(reachable)
+  useEffect(() => {
+    if (reachable && !wasReachable.current) refresh()
+    wasReachable.current = reachable
+  }, [reachable, refresh])
+
+  useEffect(() => {
+    if (!notice) return
+    const timer = setTimeout(() => setNotice(null), NOTICE_MS)
+    return () => clearTimeout(timer)
+  }, [notice])
 
   // Forget ticks for items that left the list (deleted, or restocked from Home or another phone)
   useEffect(() => {
@@ -43,24 +125,29 @@ export default function App() {
     setTicks((prev) => (prev.every((id) => due.has(id)) ? prev : prev.filter((id) => due.has(id))))
   }, [items, loading, setTicks])
 
+  // Every change shows on screen at once, then goes through the outbox to the server
+  const record = (op) => {
+    editSeq.current++
+    outbox.enqueue(op)
+  }
+
   const updateItem = (updated) => {
     const previous = items.find((it) => it.id === updated.id)
+    const delta = updated.quantity - previous.quantity
+    if (delta === 0) return
     setItems((prev) => prev.map((it) => (it.id === updated.id ? updated : it)))
-    patchItem(updated.id, { quantity: updated.quantity, lastBought: updated.lastBought }).catch(() =>
-      setItems((prev) => prev.map((it) => (it.id === updated.id ? previous : it)))
-    )
+    record({ kind: 'delta', itemId: updated.id, delta, lastBought: updated.lastBought })
   }
 
   const removeItem = (item) => {
     setItems((prev) => prev.filter((it) => it.id !== item.id))
-    deleteItem(item.id).catch(() => setItems((prev) => [...prev, item]))
+    editSeq.current++
+    if (!outbox.discardFor(item.id)) outbox.enqueue({ kind: 'delete', itemId: item.id })
   }
 
   const saveSettings = (item, patch) => {
     setItems((prev) => prev.map((it) => (it.id === item.id ? { ...it, ...patch } : it)))
-    patchItem(item.id, patch).catch(() =>
-      setItems((prev) => prev.map((it) => (it.id === item.id ? item : it)))
-    )
+    record({ kind: 'set', itemId: item.id, patch })
   }
 
   const toggleTick = (id) =>
@@ -69,7 +156,7 @@ export default function App() {
   const completeShopping = () => {
     const picked = buyNowItems.filter((it) => ticks.includes(it.id))
     if (picked.length === 0) return
-    const now = new Date().toISOString()
+    const stamp = new Date().toISOString()
     const changes = picked.map((it) => ({
       id: it.id,
       name: it.name,
@@ -82,65 +169,47 @@ export default function App() {
     setItems((prev) =>
       prev.map((it) => {
         const c = byId.get(it.id)
-        return c ? { ...it, quantity: c.from + c.added, lastBought: now } : it
+        return c ? { ...it, quantity: c.from + c.added, lastBought: stamp } : it
       })
     )
-    setLastShopping({ at: now, changes })
+    setLastShopping({ at: stamp, changes })
     setTicks([])
-
-    changes.forEach((c) =>
-      patchItem(c.id, { quantity: c.from + c.added, lastBought: now }).catch(() => {
-        // Take back just this item's addition (keeping any edits made since) and re-tick it
-        setItems((prev) =>
-          prev.map((it) =>
-            it.id === c.id ? { ...it, quantity: Math.max(0, it.quantity - c.added), lastBought: c.prevBought } : it
-          )
-        )
-        setLastShopping((prev) => {
-          const changes = prev ? prev.changes.filter((x) => x.id !== c.id) : []
-          return changes.length > 0 ? { ...prev, changes } : null
-        })
-        setTicks((prev) => [...prev, c.id])
-      })
-    )
+    changes.forEach((c) => record({ kind: 'delta', itemId: c.id, delta: c.added, lastBought: stamp }))
   }
 
   // Takes off only what Complete added, so counts changed since then still stand
   const revertShopping = () => {
     if (!lastShopping) return
-    const undo = lastShopping.changes
-      .map((c) => {
-        const current = items.find((it) => it.id === c.id)
-        if (!current) return null
-        return {
-          id: c.id,
-          before: current,
-          quantity: Math.max(0, current.quantity - c.added),
-          lastBought: c.prevBought,
-        }
-      })
-      .filter(Boolean)
-    const byId = new Map(undo.map((u) => [u.id, u]))
+    const undo = lastShopping.changes.filter((c) => items.some((it) => it.id === c.id))
+    const byId = new Map(undo.map((c) => [c.id, c]))
 
     setItems((prev) =>
       prev.map((it) => {
-        const u = byId.get(it.id)
-        return u ? { ...it, quantity: u.quantity, lastBought: u.lastBought } : it
+        const c = byId.get(it.id)
+        return c ? { ...it, quantity: Math.max(0, it.quantity - c.added), lastBought: c.prevBought } : it
       })
     )
-    setTicks(undo.map((u) => u.id))
+    setTicks(undo.map((c) => c.id))
     setLastShopping(null)
-
-    undo.forEach((u) =>
-      patchItem(u.id, { quantity: u.quantity, lastBought: u.lastBought }).catch(() =>
-        setItems((prev) => prev.map((it) => (it.id === u.id ? u.before : it)))
-      )
-    )
+    undo.forEach((c) => record({ kind: 'delta', itemId: c.id, delta: -c.added, lastBought: c.prevBought }))
   }
 
-  const addItem = async (draft) => {
-    const created = await createItem(draft)
-    setItems((prev) => [...prev, created])
+  const addItem = (draft) => {
+    const tempId = `tmp-${crypto.randomUUID()}`
+    setItems((prev) => [
+      ...prev,
+      {
+        id: tempId,
+        name: draft.name,
+        category: draft.category,
+        quantity: draft.quantity,
+        thresholds: thresholdsFor(draft.minQty),
+        usualQty: draft.usualQty,
+        reviewed: true,
+        lastBought: null,
+      },
+    ])
+    record({ kind: 'create', tempId, item: draft })
   }
 
   if (loading) {
@@ -228,6 +297,14 @@ export default function App() {
             To buy {buyNowItems.length > 0 && `(${buyNowItems.length})`}
           </button>
         </div>
+        <StatusStrip
+          reachable={reachable}
+          pending={outbox.pending}
+          itemsAt={itemsAt}
+          now={now}
+          syncedNote={outbox.syncedNote}
+          notice={notice}
+        />
       </header>
 
       <main className="px-4 pt-4">

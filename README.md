@@ -75,11 +75,16 @@ with `red` one lower) and a usual amount that Complete shopping adds. `reviewed`
 have been through the questionnaire. Older documents without `usualQty` / `reviewed` are filled in
 with defaults by `normalize()` in `lib/api.js`.
 
-Data flow: the client calls `/api/items` on load. A `+`/`-` tap, a questionnaire answer, or
-Complete shopping `PATCH`es the affected items. Ticking boxes on the To buy tab does not touch the
-network: ticks (and the undo record for the last Complete) are kept in `localStorage` on that
-phone until Complete. State lives in a plain `useState`, optimistically updated and rolled back on
-a failed request. There is no client-side cache layer (no TanStack Query yet).
+Data flow: every change (a `+`/`-` tap, a questionnaire answer, Complete shopping, add, remove) updates
+the screen at once and is written to an **outbox** in `localStorage` (`lib/useOutbox.js`), which sends
+changes to the server oldest first. Quantity changes are sent as "+1 / -2" (`quantityDelta`), not final
+numbers, so two phones add up instead of overwriting each other. No signal or a server error keeps the
+change queued and retries; a refusal (4xx) drops it, shows a notice and reloads the list.
+
+Offline: `public/sw.js` keeps the app files on the phone, and the last list from the server is kept in
+`localStorage`, so the app opens with no signal. The list reloads from the server on open, on
+returning to the app, and when signal comes back. `public/manifest.webmanifest` and the icons make it
+installable. Shopping ticks live in `localStorage` too and never touch the network until Complete.
 
 ### Known gaps, deliberately deferred
 
@@ -87,5 +92,8 @@ a failed request. There is no client-side cache layer (no TanStack Query yet).
   obscure URL; not fine if this ever needs to be shared wider.
 - **No tests.** Domain logic (`statusOf`) is pure and easy to test — this is the natural first
   target once the coached track resumes.
+- **The service worker is hand-written and small.** It caches files as they are first loaded, so the
+  very first visit must be online. There is no "new version available" prompt; updates apply on the
+  next open with signal.
 - **Ticks and Revert are per phone.** Two phones shopping at once don't see each other's ticks, and
   only the phone that pressed Complete can Revert it.

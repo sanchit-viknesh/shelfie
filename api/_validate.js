@@ -7,6 +7,8 @@ const PATCH_RULES = {
   usualQty: (v) => Number.isFinite(v) && v >= 1,
   reviewed: (v) => typeof v === 'boolean',
   lastBought: (v) => v === null || typeof v === 'string',
+  // Change by an amount (+1, -2) instead of setting the final number, so two phones don't overwrite each other
+  quantityDelta: (v) => Number.isInteger(v) && Math.abs(v) <= 1000,
   thresholds: (v) => v && isCount(v.yellow) && isCount(v.red) && v.red <= v.yellow,
 }
 
@@ -19,6 +21,7 @@ export function validatePatch(body) {
     if (!rule(value)) return { error: `Invalid value for ${key}` }
     patch[key] = key === 'thresholds' ? { yellow: value.yellow, red: value.red } : value
   }
+  if ('quantityDelta' in patch) delete patch.quantity
   if (Object.keys(patch).length === 0) return { error: 'Nothing to update' }
   return { patch }
 }

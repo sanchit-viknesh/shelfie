@@ -1,4 +1,15 @@
-function normalize(doc) {
+export class ApiError extends Error {
+  constructor(status, message) {
+    super(message)
+    this.status = status
+  }
+}
+
+const check = (res, message) => {
+  if (!res.ok) throw new ApiError(res.status, message)
+}
+
+export function normalize(doc) {
   const { _id, __v, ...rest } = doc
   // Items saved before the minimums questionnaire don't have these two fields yet
   return { id: _id, usualQty: 3, reviewed: false, ...rest }
@@ -6,7 +17,7 @@ function normalize(doc) {
 
 export async function fetchItems() {
   const res = await fetch('/api/items')
-  if (!res.ok) throw new Error('Failed to load items')
+  check(res, 'Failed to load items')
   const docs = await res.json()
   return docs.map(normalize)
 }
@@ -17,7 +28,7 @@ export async function patchItem(id, patch) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(patch),
   })
-  if (!res.ok) throw new Error('Failed to update item')
+  check(res, 'Failed to update item')
   return normalize(await res.json())
 }
 
@@ -27,11 +38,11 @@ export async function createItem(item) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(item),
   })
-  if (!res.ok) throw new Error('Failed to add item')
+  check(res, 'Failed to add item')
   return normalize(await res.json())
 }
 
 export async function deleteItem(id) {
   const res = await fetch(`/api/items/${id}`, { method: 'DELETE' })
-  if (!res.ok) throw new Error('Failed to remove item')
+  check(res, 'Failed to remove item')
 }
