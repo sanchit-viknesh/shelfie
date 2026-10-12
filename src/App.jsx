@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react'
-import { CATEGORIES } from './data/seed'
+import { categoriesOf } from './lib/categories'
 import { fetchItems, patchItem, createItem, deleteItem } from './lib/api'
 import { statusOf, STATUS_ORDER } from './lib/status'
 import { usePersisted } from './lib/usePersisted'
 import CategorySection from './components/CategorySection'
+import SearchBox from './components/SearchBox'
 import AddItemSheet from './components/AddItemSheet'
 import Questionnaire from './components/Questionnaire'
 import ToBuyView from './components/ToBuyView'
@@ -17,6 +18,7 @@ export default function App() {
   const [showAddSheet, setShowAddSheet] = useState(false)
   const [showQuestionnaire, setShowQuestionnaire] = useState(false)
   const [copied, setCopied] = useState(false)
+  const [query, setQuery] = useState('')
   // Shopping progress lives on this phone only, so ticking in the store needs no signal
   const [ticks, setTicks] = usePersisted('shelfie.ticks', [])
   const [lastShopping, setLastShopping] = usePersisted('shelfie.lastShopping', null)
@@ -138,15 +140,20 @@ export default function App() {
     )
   }
 
+  const categories = categoriesOf(items)
   const buyNowItems = items
     .filter((it) => statusOf(it) !== 'green')
     .sort(
       (a, b) =>
-        CATEGORIES.indexOf(a.category) - CATEGORIES.indexOf(b.category) ||
+        categories.indexOf(a.category) - categories.indexOf(b.category) ||
         STATUS_ORDER[statusOf(a)] - STATUS_ORDER[statusOf(b)]
     )
 
   const listText = `Shelfie - grocery list:\n${buyNowItems.map((it) => `- ${it.name} ×${it.usualQty}`).join('\n')}`
+  const search = query.trim()
+  const visibleItems = search
+    ? items.filter((it) => it.name.toLowerCase().includes(search.toLowerCase()))
+    : items
   const unreviewedCount = items.filter((it) => !it.reviewed).length
 
   const copyList = async () => {
@@ -205,7 +212,7 @@ export default function App() {
       </header>
 
       <main className="px-4 pt-4">
-        {view === 'home' && unreviewedCount > 0 && (
+        {view === 'home' && unreviewedCount > 0 && !search && (
           <div className="mb-5 flex flex-col items-start gap-2 rounded-2xl border border-band-line bg-chip p-4">
             <p className="text-sm font-extrabold text-ink">Set a minimum for each item</p>
             <p className="text-[13px] leading-snug text-muted">
@@ -221,12 +228,28 @@ export default function App() {
           </div>
         )}
 
+        {view === 'home' && <SearchBox value={query} onChange={setQuery} />}
+
+        {view === 'home' && search && (
+          <p className="-mt-2 mb-3 px-0.5 text-[13px] font-semibold text-muted" aria-live="polite">
+            {visibleItems.length} {visibleItems.length === 1 ? 'item' : 'items'}
+          </p>
+        )}
+
+        {view === 'home' && search && visibleItems.length === 0 && (
+          <div className="mt-12 flex flex-col items-center gap-1.5 text-center">
+            <p className="font-extrabold text-ink">No items match "{search}"</p>
+            <p className="text-[13px] text-muted">Check the spelling, or add it with the + button.</p>
+          </div>
+        )}
+
         {view === 'home' &&
-          CATEGORIES.map((category) => (
+          categories.map((category) => (
             <CategorySection
               key={category}
               category={category}
-              items={items.filter((it) => it.category === category)}
+              items={visibleItems.filter((it) => it.category === category)}
+              query={search}
               onChange={updateItem}
               onDelete={removeItem}
             />
@@ -235,6 +258,7 @@ export default function App() {
         {view === 'buyNow' && (
           <ToBuyView
             items={buyNowItems}
+            categories={categories}
             ticks={ticks}
             onToggle={toggleTick}
             onComplete={completeShopping}
@@ -258,11 +282,11 @@ export default function App() {
       )}
 
       {showQuestionnaire && (
-        <Questionnaire items={items} onSave={saveSettings} onClose={() => setShowQuestionnaire(false)} />
+        <Questionnaire items={items} categories={categories} onSave={saveSettings} onClose={() => setShowQuestionnaire(false)} />
       )}
 
       {showAddSheet && (
-        <AddItemSheet onClose={() => setShowAddSheet(false)} onAdd={addItem} />
+        <AddItemSheet categories={categories} onClose={() => setShowAddSheet(false)} onAdd={addItem} />
       )}
 
       {showShareSheet && (

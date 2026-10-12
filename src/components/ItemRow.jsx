@@ -4,7 +4,19 @@ import { statusOf, STATUS_LABELS } from '../lib/status'
 const stepBtn =
   'h-11 w-11 rounded-full bg-accent-soft text-ink text-xl leading-none active:scale-95 transition-transform'
 
-export default function ItemRow({ item, onChange, onDelete }) {
+function Highlight({ text, query }) {
+  const at = query ? text.toLowerCase().indexOf(query.toLowerCase()) : -1
+  if (at === -1) return text
+  return (
+    <>
+      {text.slice(0, at)}
+      <mark className="rounded-sm bg-[#cfe3fb] px-px text-inherit">{text.slice(at, at + query.length)}</mark>
+      {text.slice(at + query.length)}
+    </>
+  )
+}
+
+export default function ItemRow({ item, query = '', onChange, onDelete }) {
   const [confirmingDelete, setConfirmingDelete] = useState(false)
   const label = STATUS_LABELS[statusOf(item)]
 
@@ -41,7 +53,9 @@ export default function ItemRow({ item, onChange, onDelete }) {
   return (
     <div className="flex items-center justify-between gap-3 rounded-xl border border-line bg-white py-2.5 pl-4 pr-2">
       <div className="flex min-w-0 flex-col items-start gap-1">
-        <span className="font-bold text-ink leading-tight">{item.name}</span>
+        <span className="font-bold text-ink leading-tight">
+          <Highlight text={item.name} query={query} />
+        </span>
         {label && (
           <span className={`rounded-full px-2 py-0.5 text-xs font-bold ${label.className}`}>
             {label.text}

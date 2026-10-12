@@ -1,27 +1,34 @@
 import { useState } from 'react'
-import { CATEGORIES } from '../data/seed'
+import { MAX_CATEGORY_LENGTH, OTHER, resolveCategory } from '../lib/categories'
 import Stepper from './Stepper'
 
 const field =
   'w-full rounded-lg bg-white text-ink px-3 py-2.5 text-base mb-4 outline-none ring-1 ring-line focus:ring-2 focus:ring-accent'
 const fieldLabel = 'block text-xs font-bold uppercase tracking-wider text-muted mb-1.5'
 
-export default function AddItemSheet({ onClose, onAdd }) {
+const NEW_CATEGORY = '__new__'
+
+export default function AddItemSheet({ categories, onClose, onAdd }) {
   const [name, setName] = useState('')
-  const [category, setCategory] = useState(CATEGORIES[0])
+  const [category, setCategory] = useState(categories[0])
+  const [newCategory, setNewCategory] = useState('')
   const [quantity, setQuantity] = useState(3)
   const [minQty, setMinQty] = useState(2)
   const [usualQty, setUsualQty] = useState(3)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState(null)
 
+  const addingCategory = category === NEW_CATEGORY
+  const canSave = name.trim() && (!addingCategory || newCategory.trim()) && !saving
+
   const submit = async (e) => {
     e.preventDefault()
-    if (!name.trim() || saving) return
+    if (!canSave) return
     setSaving(true)
     setError(null)
     try {
-      await onAdd({ name: name.trim(), category, quantity, minQty, usualQty })
+      const finalCategory = addingCategory ? resolveCategory(newCategory, categories) : category
+      await onAdd({ name: name.trim(), category: finalCategory, quantity, minQty, usualQty })
       onClose()
     } catch {
       setError("Couldn't save. Check your connection and try again.")
@@ -57,12 +64,32 @@ export default function AddItemSheet({ onClose, onAdd }) {
           onChange={(e) => setCategory(e.target.value)}
           className={field}
         >
-          {CATEGORIES.map((c) => (
+          {categories.map((c) => (
             <option key={c} value={c}>
               {c}
             </option>
           ))}
+          <option value={NEW_CATEGORY}>+ Add new category</option>
         </select>
+
+        {addingCategory && (
+          <>
+            <label htmlFor="add-new-category" className={fieldLabel}>New category name</label>
+            <input
+              id="add-new-category"
+              autoFocus
+              type="text"
+              value={newCategory}
+              maxLength={MAX_CATEGORY_LENGTH}
+              onChange={(e) => setNewCategory(e.target.value)}
+              placeholder="e.g. Frozen"
+              className={`${field} mb-1`}
+            />
+            <p className="mb-4 text-[13px] text-muted">
+              It shows up on Home and in this list from now on. Not sure? Pick {OTHER} instead.
+            </p>
+          </>
+        )}
 
         <div className="mb-5 flex flex-col gap-3">
           <div className="flex items-center justify-between gap-3">
@@ -91,7 +118,7 @@ export default function AddItemSheet({ onClose, onAdd }) {
           </button>
           <button
             type="submit"
-            disabled={!name.trim() || saving}
+            disabled={!canSave}
             className="flex-1 rounded-lg bg-accent py-3 text-sm font-bold text-white disabled:opacity-50"
           >
             {saving ? 'Adding…' : 'Add item'}

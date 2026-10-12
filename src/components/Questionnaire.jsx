@@ -1,5 +1,4 @@
 import { useState } from 'react'
-import { CATEGORIES } from '../data/seed'
 import { minimumOf, thresholdsFor, STATUS_LABELS } from '../lib/status'
 import Stepper from './Stepper'
 
@@ -60,9 +59,9 @@ function QuestionCard({ item, canGoBack, onBack, onSkip, onNext }) {
   )
 }
 
-export default function Questionnaire({ items, onSave, onClose }) {
+export default function Questionnaire({ items, categories, onSave, onClose }) {
   const [order] = useState(() =>
-    CATEGORIES.flatMap((c) => items.filter((it) => it.category === c)).map((it) => it.id)
+    categories.flatMap((c) => items.filter((it) => it.category === c)).map((it) => it.id)
   )
   const [index, setIndex] = useState(() => {
     const first = order.findIndex((id) => !items.find((it) => it.id === id)?.reviewed)

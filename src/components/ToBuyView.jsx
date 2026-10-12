@@ -1,5 +1,4 @@
 import { useState } from 'react'
-import { CATEGORIES } from '../data/seed'
 
 function Check() {
   return (
@@ -41,8 +40,8 @@ function TickRow({ item, ticked, onToggle }) {
   )
 }
 
-function Grouped({ items, children }) {
-  return CATEGORIES.map((category) => {
+function Grouped({ items, categories, children }) {
+  return categories.map((category) => {
     const inCategory = items.filter((it) => it.category === category)
     if (inCategory.length === 0) return null
     return (
@@ -58,6 +57,7 @@ function Grouped({ items, children }) {
 
 export default function ToBuyView({
   items,
+  categories,
   ticks,
   onToggle,
   onComplete,
@@ -169,7 +169,7 @@ export default function ToBuyView({
         </div>
       </div>
 
-      <Grouped items={items}>
+      <Grouped items={items} categories={categories}>
         {(item) => <TickRow key={item.id} item={item} ticked={tickedSet.has(item.id)} onToggle={() => onToggle(item.id)} />}
       </Grouped>
 
