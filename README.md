@@ -1,2 +1,99 @@
-# shelfie
-A React PWA for tracking household grocery stock — what's low, what to buy, what's about to expire. Offline-first, no account, no server.
+# Shelfie
+
+A grocery inventory tracker for one household — what's stocked, what's low, what to buy. Two phones,
+one shared live dataset, installed to the iOS home screen, usable on bad store wifi.
+
+**This repo is a learning project.** The app is real and will get used; the point is learning the
+stack that builds it.
+
+## Learning goals
+
+React 19 · Vite · Tailwind 4 · Node/Express · MongoDB · JWT auth · PWA · frontend system design
+
+Coming from ten years of Angular, so [`docs/ANGULAR-TO-REACT.md`](docs/ANGULAR-TO-REACT.md) is the
+translation layer.
+
+## Start here
+
+1. [`docs/ROADMAP.md`](docs/ROADMAP.md) — the whole arc, 14 phases across 4 milestones
+2. [`docs/phases/00-system-design.md`](docs/phases/00-system-design.md) — first session, no code
+3. [`docs/ANGULAR-TO-REACT.md`](docs/ANGULAR-TO-REACT.md) — keep it open through Phase 4
+
+## Planned stack (the 14-phase coached plan)
+
+| Layer | Choice |
+|---|---|
+| UI | React 19, Vite 8, Tailwind 4 |
+| Server state | TanStack Query 5 |
+| API | Express 5 |
+| Database | MongoDB Atlas (M0 free tier) + Mongoose |
+| Auth | JWT + bcryptjs, per-user accounts sharing a household |
+| Tests | Vitest, over pure domain logic |
+| Hosting | Vercel (Hobby) |
+
+Both hosting and database are free tier with no credit card, and neither can surprise-bill.
+
+## Status: paused plan, working v1 shipped instead
+
+The 14-phase "you type every line, I coach" plan above was paused early on in favor of a working
+app the household could actually use right away. What exists today is simpler than the planned
+stack, built to be functional first:
+
+| Layer | What's actually running |
+|---|---|
+| UI | React 19, Vite 8, Tailwind 4 |
+| API | Plain Vercel serverless functions under `/api` (no Express) |
+| Database | MongoDB Atlas (M0 free tier) + Mongoose |
+| Auth | None — the API is unauthenticated, trusted by obscurity of the URL |
+| Tests | None yet |
+| Hosting | Vercel (Hobby), auto-deploys `main` |
+
+The coached, from-scratch build (Express, JWT auth, TanStack Query, tests) remains the intended
+learning track and will resume — this is the pragmatic detour that let the app go live for real
+household use in the meantime.
+
+## Current architecture
+
+```
+src/                React client (Vite)
+  data/seed.js      Base item list — source of truth for a fresh/reset database
+  lib/api.js        fetch() wrappers around /api/items
+  lib/status.js     Pure domain logic: quantity + minimum -> red/yellow/green
+  lib/usePersisted.js  useState backed by localStorage (shopping ticks live on the phone)
+  components/       Home rows, To buy view (tick boxes, Complete / Revert), minimums
+                    questionnaire, add-item sheet
+api/
+  _db.js            Mongoose connection (cached across warm serverless invocations) + Item schema
+  items.js          GET (list all) / POST (add one item)
+  items/[id].js     PATCH (update one item) / DELETE (remove one item)
+scripts/seedDb.js   One-off: push src/data/seed.js into MongoDB (replaces the collection)
+```
+
+An item is `{ name, category, quantity, thresholds: { yellow, red }, usualQty, reviewed, lastBought }`.
+Each item has its own minimum (the "buy more when down to" number, stored as `thresholds.yellow`,
+with `red` one lower) and a usual amount that Complete shopping adds. `reviewed` marks items that
+have been through the questionnaire. Older documents without `usualQty` / `reviewed` are filled in
+with defaults by `normalize()` in `lib/api.js`.
+
+Data flow: every change (a `+`/`-` tap, a questionnaire answer, Complete shopping, add, remove) updates
+the screen at once and is written to an **outbox** in `localStorage` (`lib/useOutbox.js`), which sends
+changes to the server oldest first. Quantity changes are sent as "+1 / -2" (`quantityDelta`), not final
+numbers, so two phones add up instead of overwriting each other. No signal or a server error keeps the
+change queued and retries; a refusal (4xx) drops it, shows a notice and reloads the list.
+
+Offline: `public/sw.js` keeps the app files on the phone, and the last list from the server is kept in
+`localStorage`, so the app opens with no signal. The list reloads from the server on open, on
+returning to the app, and when signal comes back. `public/manifest.webmanifest` and the icons make it
+installable. Shopping ticks live in `localStorage` too and never touch the network until Complete.
+
+### Known gaps, deliberately deferred
+
+- **No auth.** Anyone with the URL can read or write the list. Fine for a household app with an
+  obscure URL; not fine if this ever needs to be shared wider.
+- **No tests.** Domain logic (`statusOf`) is pure and easy to test — this is the natural first
+  target once the coached track resumes.
+- **The service worker is hand-written and small.** It caches files as they are first loaded, so the
+  very first visit must be online. There is no "new version available" prompt; updates apply on the
+  next open with signal.
+- **Ticks and Revert are per phone.** Two phones shopping at once don't see each other's ticks, and
+  only the phone that pressed Complete can Revert it.
