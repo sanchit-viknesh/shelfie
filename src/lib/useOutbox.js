@@ -29,9 +29,10 @@ export function useOutbox({ onCreated, onRejected }) {
   const [queue, setQueue] = usePersisted(KEY, [])
   const queueRef = useRef(queue)
   const running = useRef(null)
-  const wasOffline = useRef(false)
+  const hadProblem = useRef(false)
   const handlers = useRef({ onCreated, onRejected })
-  const [reachable, setReachable] = useState(() => navigator.onLine)
+  // null = fine, 'offline' = no signal, 'server' = the server answered with an error
+  const [problem, setProblem] = useState(() => (navigator.onLine ? null : 'offline'))
   const [syncedNote, setSyncedNote] = useState(0)
 
   useEffect(() => {
@@ -46,13 +47,14 @@ export function useOutbox({ onCreated, onRejected }) {
     [setQueue]
   )
 
-  const markReachable = useCallback((ok) => {
-    if (!ok) wasOffline.current = true
-    setReachable(ok)
+  const markProblem = useCallback((kind) => {
+    if (kind) hadProblem.current = true
+    setProblem(kind)
   }, [])
 
   const runFlush = useCallback(async () => {
     let synced = 0
+    let stuck = null
     while (queueRef.current.length > 0) {
       const op = queueRef.current[0]
       try {
@@ -67,24 +69,24 @@ export function useOutbox({ onCreated, onRejected }) {
         } else {
           update((q) => q.filter((o) => o.id !== op.id))
         }
-        setReachable(true)
       } catch (err) {
         if (shouldRetry(err)) {
-          markReachable(false)
+          stuck = err instanceof ApiError ? 'server' : 'offline'
           break
         }
         update((q) => q.filter((o) => o.id !== op.id))
-        setReachable(true)
         // The item being already gone is fine: the other phone got there first
         if (!(err.status === 404 && op.kind !== 'create')) handlers.current.onRejected(op, err)
       }
     }
-    if (synced > 0 && wasOffline.current && queueRef.current.length === 0) {
-      wasOffline.current = false
+    // The problem only clears once every waiting change has gone through
+    markProblem(stuck)
+    if (synced > 0 && !stuck && hadProblem.current) {
+      hadProblem.current = false
       setSyncedNote(synced)
     }
     return synced
-  }, [update, markReachable])
+  }, [update, markProblem])
 
   // A second caller waits for the flush already under way instead of starting another
   const flush = useCallback(() => {
@@ -119,7 +121,7 @@ export function useOutbox({ onCreated, onRejected }) {
   // Try again whenever signal comes back, and every so often while changes are waiting
   useEffect(() => {
     const online = () => flush()
-    const offline = () => markReachable(false)
+    const offline = () => markProblem('offline')
     window.addEventListener('online', online)
     window.addEventListener('offline', offline)
     const timer = setInterval(() => queueRef.current.length > 0 && flush(), RETRY_MS)
@@ -128,7 +130,7 @@ export function useOutbox({ onCreated, onRejected }) {
       window.removeEventListener('offline', offline)
       clearInterval(timer)
     }
-  }, [flush, markReachable])
+  }, [flush, markProblem])
 
   useEffect(() => {
     if (!syncedNote) return
@@ -136,5 +138,5 @@ export function useOutbox({ onCreated, onRejected }) {
     return () => clearTimeout(timer)
   }, [syncedNote])
 
-  return { enqueue, discardFor, flush, isEmpty, markReachable, pending: queue.length, reachable, syncedNote }
+  return { enqueue, discardFor, flush, isEmpty, markProblem, pending: queue.length, problem, syncedNote }
 }

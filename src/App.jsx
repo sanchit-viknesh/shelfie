@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { categoriesOf } from './lib/categories'
-import { fetchItems, normalize } from './lib/api'
+import { ApiError, fetchItems, normalize } from './lib/api'
 import { statusOf, STATUS_ORDER, thresholdsFor } from './lib/status'
 import { usePersisted } from './lib/usePersisted'
 import { useOutbox } from './lib/useOutbox'
@@ -58,7 +58,7 @@ export default function App() {
   }, [])
   const itemsAtRef = useRef(itemsAt)
   const outbox = useOutbox({ onCreated, onRejected })
-  const { flush, isEmpty, markReachable, reachable } = outbox
+  const { flush, isEmpty, markProblem, problem } = outbox
 
   // Send waiting changes, then replace the list with the server's copy (this also picks up the other phone's changes)
   const refresh = useCallback(async () => {
@@ -69,19 +69,19 @@ export default function App() {
       await flush()
       const seq = editSeq.current
       const fresh = await fetchItems()
-      markReachable(true)
       // Skip it if something changed while it loaded; the next refresh gets it
       if (editSeq.current === seq && isEmpty()) {
         setItems(fresh)
         setItemsAt(Date.now())
+        markProblem(null)
       }
     } catch (err) {
-      markReachable(false)
+      markProblem(err instanceof ApiError ? 'server' : 'offline')
       setLoadError((prev) => prev ?? (itemsAtRef.current === null ? err.message : null))
     } finally {
       refreshing.current = false
     }
-  }, [flush, isEmpty, markReachable, setItems, setItemsAt])
+  }, [flush, isEmpty, markProblem, setItems, setItemsAt])
   useEffect(() => {
     itemsAtRef.current = itemsAt
   })
@@ -106,11 +106,11 @@ export default function App() {
   }, [refresh])
 
   // After signal returns (even without an 'online' event), bring in the other phone's changes
-  const wasReachable = useRef(reachable)
+  const hadProblem = useRef(problem !== null)
   useEffect(() => {
-    if (reachable && !wasReachable.current) refresh()
-    wasReachable.current = reachable
-  }, [reachable, refresh])
+    if (problem === null && hadProblem.current) refresh()
+    hadProblem.current = problem !== null
+  }, [problem, refresh])
 
   useEffect(() => {
     if (!notice) return
@@ -298,7 +298,7 @@ export default function App() {
           </button>
         </div>
         <StatusStrip
-          reachable={reachable}
+          problem={problem}
           pending={outbox.pending}
           itemsAt={itemsAt}
           now={now}
